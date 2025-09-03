@@ -1,282 +1,312 @@
-##Imports 
-
 import json
-import argparse
 import math
+import argparse
 import time
-from typing import List, Tuple, Dict, Set, Optional
-from itertools import combinations
+import random
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from multiprocessing import cpu_count
 
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description="Solve Route Construction Problem using various heuristics"
+    )
+    parser.add_argument('--input', required=True, help="Path to input JSON file with instances")
+    parser.add_argument('--output', required=True, help="Path to output JSON file for solutions")
+    parser.add_argument('--method', required=True,
+                        choices=['greedy', 'beam', 'annealing', 'local', 'hybrid'],
+                        help="Solving method (greedy, beam, annealing, local, hybrid)")
+    parser.add_argument('--verbose', action='store_true',
+                        help="Enable verbose logging per instance")
+    parser.add_argument('--timeout', type=float, default=None,
+                        help="Timeout (seconds) per instance")
+    return parser.parse_args()
 
-class RouteConstructionSolver:
+def euclidean(p1, p2):
+    """Euclidean distance between points p1 and p2."""
+    return math.hypot(p1[0] - p2[0], p1[1] - p2[1])
+
+def path_length(path):
+    """Total length of a path (sum of Euclidean segments)."""
+    length = 0.0
+    for i in range(len(path) - 1):
+        length += euclidean(path[i], path[i+1])
+    return length
+
+def greedy_solve(start_points, end_points, goal_points):
     """
-    Solver for the route construction optimization problem.
-    
-    Uses a greedy nearest-neighbor approach with path optimization
-    and constraint validation.
+    Enhanced greedy: start at a chosen start point and always go to the nearest unvisited goal
+    that does not violate length/end constraints. Then finish at the nearest end point.
     """
-    
-    def __init__(self, max_length: float = 2000.0, max_points: int = 100):
-        self.max_length = max_length
-        self.max_points = max_points
-        
-    def distance(self, p1: Tuple[int, int], p2: Tuple[int, int]) -> float:
-        """Calculate Euclidean distance between two points."""
-        return math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
-    
-    def path_length(self, path: List[Tuple[int, int]]) -> float:
-        """Calculate total length of a path."""
-        if len(path) < 2:
-            return 0.0
-        return sum(self.distance(path[i], path[i+1]) for i in range(len(path)-1))
-    
-    def segments_intersect(self, seg1: Tuple[Tuple[int, int], Tuple[int, int]], 
-                          seg2: Tuple[Tuple[int, int], Tuple[int, int]]) -> bool:
-        """
-        Check if two line segments intersect at interior points.
-        Returns False if segments are adjacent (share an endpoint).
-        """
-        (p1, p2), (p3, p4) = seg1, seg2
-        
-        # Skip if segments share an endpoint (adjacent segments)
-        if p1 == p3 or p1 == p4 or p2 == p3 or p2 == p4:
-            return False
-            
-        # Check if segments intersect using cross product method
-        def ccw(A, B, C):
-            return (C[1] - A[1]) * (B[0] - A[0]) > (B[1] - A[1]) * (C[0] - A[0])
-        
-        return ccw(p1, p3, p4) != ccw(p2, p3, p4) and ccw(p1, p2, p3) != ccw(p1, p2, p4)
-    
-    def has_self_intersection(self, path: List[Tuple[int, int]]) -> bool:
-        """Check if path has any self-intersections."""
-        if len(path) < 4:
-            return False
-            
-        segments = [(path[i], path[i+1]) for i in range(len(path)-1)]
-        
-        # Check all non-adjacent segment pairs
-        for i in range(len(segments)):
-            for j in range(i+2, len(segments)):
-                if self.segments_intersect(segments[i], segments[j]):
-                    return True
-        return False
-    
-    def is_valid_path(self, path: List[Tuple[int, int]], 
-                     start_points: List[Tuple[int, int]], 
-                     end_points: List[Tuple[int, int]]) -> bool:
-        """Validate that path satisfies all constraints."""
-        if len(path) == 0:
-            return True
-            
-        # Check point limit
-        if len(path) > self.max_points:
-            return False
-            
-        # Check length constraint
-        if self.path_length(path) >= self.max_length:
-            return False
-            
-        # Check valid start and end points
-        if len(path) >= 1 and tuple(path[0]) not in start_points:
-            return False
-        if len(path) >= 2 and tuple(path[-1]) not in end_points:
-            return False
-            
-        # Check for self-intersection
-        if self.has_self_intersection(path):
-            return False
-            
-        # Check coordinate bounds
-        for x, y in path:
-            if not (-1000 <= x <= 1000 and -1000 <= y <= 1000):
-                return False
-                
-        # Check for repeated coordinates
-        if len(set(path)) != len(path):
-            return False
-            
-        return True
-    
-    def greedy_solve(self, start_points: List[List[int]], 
-                    end_points: List[List[int]], 
-                    goal_points: List[List[int]]) -> List[List[int]]:
-        """
-        Solve using greedy nearest-neighbor approach.
-        
-        Args:
-            start_points: List of valid starting coordinates
-            end_points: List of valid ending coordinates  
-            goal_points: List of goal coordinates to visit
-            
-        Returns:
-            List of coordinates forming the optimal path
-        """
-        # Convert to tuples for easier handling
-        start_pts = [tuple(p) for p in start_points]
-        end_pts = [tuple(p) for p in end_points]
-        goal_pts = [tuple(p) for p in goal_points]
-        
-        best_path = []
-        best_goals = 0
-        
-        # Try each start point
-        for start in start_pts:
-            for end in end_pts:
-                # Skip if start and end are the same
-                if start == end:
-                    continue
-                    
-                # Try to build path from start to end visiting goals
-                path = self.build_path(start, end, goal_pts)
-                
-                # Check constraints, is path valid
-                if self.is_valid_path(path, start_pts, end_pts):
-                    # Count goal points visited
-                    goals_visited = sum(1 for p in path if p in goal_pts)
-                    
-                    if goals_visited > best_goals:
-                        best_goals = goals_visited
-                        best_path = path
-        
-        # Convert back to list format
-        return [list(p) for p in best_path]
-    
-    def build_path(self, start: Tuple[int, int], end: Tuple[int, int], 
-                  goal_points: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
-        """Build path from start to end visiting as many goals as possible."""
-        path = [start]
-        visited_goals = set()
-        remaining_goals = [g for g in goal_points if g != start and g != end]
-        
-        current = start
-        
-        while len(path) < self.max_points - 1:
-            # Find nearest unvisited goal that doesn't violate constraints
-            best_goal = None
-            best_distance = float('inf')
-            
-            for goal in remaining_goals:
-                if goal in visited_goals:
-                    continue
-                    
-                # Check if adding this goal would exceed length limit
-                dist_to_goal = self.distance(current, goal)
-                dist_goal_to_end = self.distance(goal, end)
-                
-                if (self.path_length(path) + dist_to_goal + dist_goal_to_end 
-                    < self.max_length):
-                    
-                    # Test path with this goal added
-                    test_path = path + [goal]
-                    if not self.has_self_intersection(test_path):
-                        if dist_to_goal < best_distance:
-                            best_distance = dist_to_goal
-                            best_goal = goal
-            
-            if best_goal is None:
-                break
-                
-            path.append(best_goal)
-            visited_goals.add(best_goal)
-            current = best_goal
-        
-        # Add end point if we can reach it
-        if current != end:
-            final_dist = self.distance(current, end)
-            if (self.path_length(path) + final_dist < self.max_length and
-                len(path) < self.max_points):
-                test_path = path + [end]
-                if not self.has_self_intersection(test_path):
-                    path.append(end)
-        
-        return path
-    
-    def solve_instance(self, instance_data: Dict) -> List[List[int]]:
-        """Solve a single problem instance."""
-        start_points = instance_data['start_points']
-        end_points = instance_data['end_points']
-        goal_points = instance_data['goal_points']
-        
-        return self.greedy_solve(start_points, end_points, goal_points)
+    current = start_points[0]  # pick the first start point
+    path = [current]
+    visited = set()
+    total_len = 0.0
 
+    # Iteratively pick nearest goal
+    while True:
+        next_goal = None
+        min_dist = float('inf')
+        for g in goal_points:
+            if g in visited:
+                continue
+            d = euclidean(current, g)
+            # Check if adding this goal still allows reaching an end within limits
+            nearest_end_dist = min(euclidean(g, e) for e in end_points)
+            if total_len + d + nearest_end_dist < 2000 and d < min_dist:
+                min_dist = d
+                next_goal = g
+        if next_goal is None:
+            break
+        # Add this goal
+        path.append(next_goal)
+        visited.add(next_goal)
+        total_len += min_dist
+        current = next_goal
+        if len(path) >= 100:
+            break  # respect point limit
+
+    # Finally append the nearest end point
+    nearest_end = min(end_points, key=lambda e: euclidean(current, e))
+    path.append(nearest_end)
+    return path
+
+def beam_solve(start_points, end_points, goal_points, beam_width=3):
+    """
+    Beam search: expand a fixed number of best partial paths at each step
+    Each beam state is (path, visited_goals, length). We keep the top W beams sorted
+    by (goals_visited desc, length asc).
+    """
+    # Initialize beams from all start points
+    beams = [([s], set(), 0.0) for s in start_points]
+    best_path = None
+
+    # Expand in levels up to number of goals
+    for _ in range(len(goal_points)):
+        candidates = []
+        for path, visited, length in beams:
+            last = path[-1]
+            # Try adding each unvisited goal
+            for g in goal_points:
+                if g in visited:
+                    continue
+                d = euclidean(last, g)
+                nearest_end_dist = min(euclidean(g, e) for e in end_points)
+                if length + d + nearest_end_dist < 2000:
+                    new_path = path + [g]
+                    new_visited = visited.union({g})
+                    new_length = length + d
+                    candidates.append((new_path, new_visited, new_length))
+        if not candidates:
+            break
+        # Sort by (goals count desc, length asc)
+        candidates.sort(key=lambda x: (-len(x[1]), x[2]))
+        beams = candidates[:beam_width]
+        # Track best by goals, then by shortest length
+        for path, visited, length in beams:
+            if (best_path is None) or (len(visited) > len(best_path[1])) \
+               or (len(visited) == len(best_path[1]) and length < best_path[2]):
+                best_path = (path, visited, length)
+
+    # If no expansions, fallback to greedy
+    if not beams:
+        return greedy_solve(start_points, end_points, goal_points)
+    # Choose the best beam and append closest end
+    path, visited, length = best_path if best_path else beams[0]
+    end_choice = min(end_points, key=lambda e: euclidean(path[-1], e))
+    path.append(end_choice)
+    return path
+
+def simulated_annealing_solve(start_points, end_points, goal_points,
+                              max_iter=500, init_temp=1000.0, cooling_rate=0.995):
+    """
+    Simulated annealing: start from a greedy solution and perform random local changes,
+    accepting worse solutions with decreasing probability.
+    We encode objectives so that higher goal count and shorter length are preferred.
+    """
+    # Initial solution (strip end to operate on goals only)
+    full_path = greedy_solve(start_points, end_points, goal_points)
+    end_pt = full_path[-1]
+    path = full_path[:-1]  # drop final end
+    current_score = len(path)
+    best_path = list(path)
+    best_score = current_score
+    length_curr = path_length(path + [end_pt])
+    temperature = init_temp
+
+    for _ in range(max_iter):
+        # Cool down
+        temperature *= cooling_rate
+        if temperature < 1e-3:
+            break
+        # Generate a neighbor: either 2-opt swap or add a random new goal
+        new_path = list(path)
+        if len(new_path) > 1 and random.random() < 0.5:
+            i, j = sorted(random.sample(range(1, len(new_path)), 2))
+            new_path[i:j] = reversed(new_path[i:j])
+        else:
+            # try inserting a new goal
+            remaining = [g for g in goal_points if g not in new_path]
+            if remaining:
+                if random.random() < 0.5 and new_path:
+                    idx = random.randrange(len(new_path))
+                    new_goal = random.choice(remaining)
+                    new_path.insert(idx, new_goal)
+                else:
+                    new_goal = random.choice(remaining)
+                    new_path.append(new_goal)
+        # Compute new score
+        new_score = len(new_path)
+        new_length = path_length(new_path + [end_pt]) if new_path else float('inf')
+        # Weighted difference: prioritize goals (×1000) then length
+        delta = (new_score - current_score) * 1000 + (length_curr - new_length)
+        # Accept condition
+        if (delta > 0) or (math.exp(delta / temperature) > random.random()):
+            path = new_path
+            current_score = new_score
+            length_curr = new_length
+            if (new_score > best_score) or (new_score == best_score and new_length < path_length(best_path + [end_pt])):
+                best_path = list(new_path)
+                best_score = new_score
+
+    final = best_path + [end_pt]
+    return final
+
+def local_search_solve(start_points, end_points, goal_points):
+    """
+    Local 2-opt search: start from greedy solution and iteratively apply 2-opt swaps
+    to shorten the path:contentReference[oaicite:11]{index=11}. Repeat until no improvement.
+    """
+    path = greedy_solve(start_points, end_points, goal_points)
+    best = list(path)
+    improved = True
+    while improved:
+        improved = False
+        n = len(best)
+        # Try all pairs of edges (i, j)
+        for i in range(1, n-2):
+            for j in range(i+1, n-1):
+                new_path = best[:i] + best[i:j+1][::-1] + best[j+1:]
+                if path_length(new_path) < path_length(best):
+                    best = new_path
+                    improved = True
+                    # Once improved, restart search
+        # continue until no more improvements
+    return best
+
+def hybrid_solve(start_points, end_points, goal_points):
+    """
+    Hybrid: run greedy then improve by local 2-opt search.
+    """
+    path = greedy_solve(start_points, end_points, goal_points)
+    best = list(path)
+    improved = True
+    while improved:
+        improved = False
+        n = len(best)
+        for i in range(1, n-2):
+            for j in range(i+1, n-1):
+                new_path = best[:i] + best[i:j+1][::-1] + best[j+1:]
+                if path_length(new_path) < path_length(best):
+                    best = new_path
+                    improved = True
+    return best
+
+def solve_instance(name, data, method, verbose=False):
+    """
+    Solve one instance using the selected method. Returns (path, time).
+    """
+    start_pts = [tuple(pt) for pt in data['start_points']]
+    end_pts = [tuple(pt) for pt in data['end_points']]
+    goal_pts = [tuple(pt) for pt in data['goal_points']]
+
+    # Select solver function
+    if method == 'greedy':
+        solver = greedy_solve
+    elif method == 'beam':
+        solver = beam_solve
+    elif method == 'annealing':
+        solver = simulated_annealing_solve
+    elif method == 'local':
+        solver = local_search_solve
+    elif method == 'hybrid':
+        solver = hybrid_solve
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+    start_time = time.time()
+    try:
+        path = solver(start_pts, end_pts, goal_pts)
+    except Exception:
+        # In case of error, fallback to greedy
+        path = greedy_solve(start_pts, end_pts, goal_pts)
+    elapsed = time.time() - start_time
+
+    if verbose:
+        print(f"[{name}] method={method}, time={elapsed:.2f}s")
+    return path, elapsed
 
 def main():
-    """Main function to run the route construction solver."""
-    
-    # Arguments setup
-    
-    parser = argparse.ArgumentParser(description='Route Construction Problem Solver')
-    parser.add_argument('--input', required=True, 
-                       help='Path to input JSON file containing problem instances')
-    parser.add_argument('--output', required=True,
-                       help='Path where solution JSON file should be written')
-    parser.add_argument('--verbose', action='store_true',
-                       help='Enable verbose logging')
-    
-    args = parser.parse_args()
-    
-    # Load input data
-    try:
-        with open(args.input, 'r') as f:
-            instances = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        print(f"Error loading input file: {e}")
-        return 1
-    
-    # Initialize solver
-    solver = RouteConstructionSolver()
+    args = parse_arguments()
+    # Load input JSON
+    with open(args.input, 'r') as infile:
+        instances = json.load(infile)
+
     solutions = {}
-    
     total_goals = 0
     total_instances = len(instances)
-    start_time = time.time()
-    
-    # Solve each instance
-    for i, (instance_name, instance_data) in enumerate(instances.items(), 1):
-        if args.verbose:
-            print(f"Solving {instance_name} ({i}/{total_instances})...")
-            
-        instance_start = time.time()
-        solution = solver.solve_instance(instance_data)
-        instance_time = time.time() - instance_start
-        
-        solutions[instance_name] = solution
-        
-        # Count goals visited
-        goal_points_set = set(tuple(p) for p in instance_data['goal_points'])
-        goals_visited = sum(1 for p in solution if tuple(p) in goal_points_set)
-        total_goals += goals_visited
-        
-        if args.verbose:
-            print(f"  Goals visited: {goals_visited}/{len(instance_data['goal_points'])}")
-            print(f"  Path length: {len(solution)} points")
-            if solution:
-                path_dist = solver.path_length([tuple(p) for p in solution])
-                print(f"  Total distance: {path_dist:.2f}")
-            print(f"  Time: {instance_time:.3f}s")
-    
-    total_time = time.time() - start_time
-    
-    # Save solutions to json file
-    try:
-        with open(args.output, 'w') as f:
-            json.dump(solutions, f, indent=2)
-    # Exception handling
-    except IOError as e:
-        print(f"Error writing output file: {e}")
-        return 1
-    
-    # Display summary of optimsation algorithm
+    total_time = 0.0
+
+    workers = cpu_count()
+    if workers < 1:
+        workers = 1
+
+    start_all = time.time()
+
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        futures = {
+            executor.submit(solve_instance, name, inst, args.method, args.verbose): name
+            for name, inst in instances.items()
+        }
+        for future in as_completed(futures):
+            name = futures[future]
+            try:
+                path, used_time = future.result(timeout=args.timeout)
+            except Exception:
+                if args.verbose:
+                    print(f"[{name}] Timed out or error (timeout={args.timeout}s). Using fallback.")
+                inst = instances[name]
+                start_pt = tuple(inst['start_points'][0])
+                end_pt = tuple(inst['end_points'][0])
+                path = [start_pt, end_pt]
+                used_time = args.timeout if args.timeout else 0.0
+
+            # Save solution
+            sol_list = [list(pt) for pt in path]
+            solutions[name] = sol_list
+
+            # Metrics
+            goal_set = {tuple(pt) for pt in instances[name]['goal_points']}
+            goals_visited = sum(1 for pt in path if pt in goal_set)
+            total_goals += goals_visited
+            total_time += used_time
+
+            length = path_length(path)
+            num_points = len(path)
+            print(f"{name}: goals={goals_visited}, length={length:.2f}, "
+                  f"points={num_points}, time={used_time:.2f}s")
+
+    # Write solutions to json file
+    with open(args.output, 'w') as outfile:
+        json.dump(solutions, outfile, indent=2)
+
+    # Overall summary
+    total_runtime = time.time() - start_all
     print(f"\nSolution Summary:")
     print(f"Total goal points visited: {total_goals}")
     print(f"Total instances solved: {total_instances}")
     print(f"Average goals per instance: {total_goals/total_instances:.2f}")
-    print(f"Total runtime: {total_time:.2f}s")
+    print(f"Total runtime (wall time): {total_runtime:.2f}s")
     print(f"Average time per instance: {total_time/total_instances:.3f}s")
-    
-    return 0
-
 
 if __name__ == "__main__":
-    exit(main())
+    main()
