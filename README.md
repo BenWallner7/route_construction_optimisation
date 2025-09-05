@@ -50,7 +50,11 @@ Example usage: `python solve.py --input instances.json --output solution.json --
 
 ## Analysis Scripts
 
-The `./method_analysis/` directory 
+The `./method_analysis/` directory contains an 'evaluate_methods.py' script which will run each of the 5 methods considered and record their outcomes to a csv file, this is then fed into the 'method_comparison_analysis.py' file which will compare the 5 methods with key numerical analysis.
+
+'route_opt_results.csv' is the file produced by 'evaluate_methods.py' which contains the key results for each method.
+
+'analysis_report.txt' is the report produced from 'method_comparison_analysis.py'  which compares the different methods based on various benchmarks.
 
 ## Past solutions
 
