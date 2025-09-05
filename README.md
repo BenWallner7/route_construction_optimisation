@@ -46,4 +46,12 @@ Example usage: `python solve.py --input instances.json --output solution.json --
 
 ## Outputs
 
-- `solution.json`:
+- `solution.json`: solutions for the input instance file
+
+## Analysis Scripts
+
+The `./method_analysis/` directory 
+
+## Past solutions
+
+The `./initial_solution/` directory contains the first solution considered which is the standard greedy nearest neighbour approach. 

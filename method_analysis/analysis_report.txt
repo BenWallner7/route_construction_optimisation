@@ -1,0 +1,79 @@
+Route Optimization Analysis Report
+Generated: 2025-09-05 10:07:08
+
+
+=== EXECUTIVE SUMMARY ===
+Total Experiments: 500
+Methods Compared: greedy, hybrid, local, beam, annealing
+Best Overall Method: beam (score: 0.4618)
+
+=== PRIMARY METRICS ===
+Total Goals Visited by Method:
+  beam: 648 total (6.48 avg)
+  hybrid: 383 total (3.83 avg)
+  greedy: 383 total (3.83 avg)
+  local: 383 total (3.83 avg)
+  annealing: 254 total (2.54 avg)
+
+Constraint Validation:
+ annealing: 12/100 valid (12.0%)
+      beam: 100/100 valid (100.0%)
+    greedy: 100/100 valid (100.0%)
+    hybrid: 100/100 valid (100.0%)
+     local: 100/100 valid (100.0%)
+
+Runtime Performance:
+  annealing: 0.078296s avg, 7.8296s total
+  beam: 0.008838s avg, 0.8838s total
+  greedy: 0.001456s avg, 0.1456s total
+  hybrid: 0.001694s avg, 0.1694s total
+  local: 0.001676s avg, 0.1676s total
+
+Instance Level Analysis:
+  Goals visited vs num_starts: correlation = 0.050
+  Goals visited vs num_ends: correlation = 0.035
+  Goals visited vs num_goals: correlation = 0.253
+
+=== METHOD RANKINGS ===
+
+Total Goals:
+  1. beam: 648.0000
+  2. hybrid: 383.0000
+  3. greedy: 383.0000
+  4. local: 383.0000
+  5. annealing: 254.0000
+
+Avg Goals:
+  1. beam: 6.4800
+  2. hybrid: 3.8300
+  3. greedy: 3.8300
+  4. local: 3.8300
+  5. annealing: 2.5400
+
+Speed (1/runtime):
+  1. greedy: 686.8132
+  2. local: 596.6587
+  3. hybrid: 590.3188
+  4. beam: 113.1478
+  5. annealing: 12.7720
+
+Reliability:
+  1. beam: 1.0000
+  2. hybrid: 1.0000
+  3. greedy: 1.0000
+  4. local: 1.0000
+  5. annealing: 0.1200
+
+Efficiency:
+  1. annealing: 0.7206
+  2. beam: 0.6888
+  3. greedy: 0.4954
+  4. hybrid: 0.4954
+  5. local: 0.4954
+
+=== RECOMMENDATIONS ===
+- For maximum goal coverage: beam
+- For fastest execution: greedy
+- For best reliability: beam
+- For best efficiency: annealing
+- Best overall balance: beam
