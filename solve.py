@@ -9,7 +9,7 @@ from itertools import combinations
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
-        description="Solve Route Construction Problem using various heuristics"
+        description="Solve Route Construction Problem using various methods"
     )
     parser.add_argument('--input', required=True, help="Path to input JSON file with instances")
     parser.add_argument('--output', required=True, help="Path to output JSON file for solutions")
