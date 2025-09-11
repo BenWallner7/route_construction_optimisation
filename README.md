@@ -1,10 +1,31 @@
 # Route Construction Optimisation
 
-You are tasked with solving a route construction optimization problem. Given three sets of 2D coordinate points, your objective is to construct an optimal path that maximizes the number of goal points visited while satisfying specific constraints.
+Solving a route construction optimization problem. Given three sets of 2D coordinate points, your objective is to construct an optimal path that maximizes the number of goal points visited while satisfying specific constraints.
 
-## Different Optimisation Approaches
+## Different Algorithmic Approaches
 
 - Greedy Nearest-Neighbour algorithm with constraint validation.
+
+- Greedy Nearest-Neighbour Insertion method.
+
+- Beam Search with Distance Heuristic
+
+- Simulated Annealing
+
+- Local Search (3-Opt)
+
+- Hybrid approach
+
+
+## Constraints
+
+**Point Limit**: Maximum of 100 coordinates in your path sequence.
+
+**Length Limit**: Total cumulative length of all line segments must be strictly less than 2000.
+
+**No Self-Intersection**: The path cannot cross, overlap, or touch itself at any point.
+
+**No Repeated Visits**: Each coordinate can be visited at most once.
 
 ## Key scripts
 
